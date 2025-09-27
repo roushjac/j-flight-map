@@ -173,7 +173,7 @@
       coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
       positionFormat: 'XYZ',
       getPosition: d => [d.position[0], d.position[1], (d.position[2]||0) * TERRAIN_EXAGGERATION],
-      getColor: d => colorForZHeli(d.position[2]||0),
+      getColor: d => [224, 9, 9, 255], // solid red for helicopter
       pointSize: 12,
       updateTriggers: { getColor: [minZHeli, maxZHeli] }
     });
@@ -185,7 +185,7 @@
       coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
       positionFormat: 'XYZ',
       getPosition: d => [d.position[0], d.position[1], (d.position[2]||0) * TERRAIN_EXAGGERATION],
-      getColor: d => colorForZPara(d.position[2]||0),
+      getColor: d => [0, 200, 255, 255], // solid cyan for paraglider
       pointSize: 12,
       updateTriggers: { getColor: [minZPara, maxZPara] }
     });
