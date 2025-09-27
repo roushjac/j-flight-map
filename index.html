@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>deck.gl 3D Points (LNGLAT+Z) with Mapbox Terrain</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body, #container { margin: 0; height: 100%; width: 100%; }
+    .mapboxgl-popup, .mapboxgl-popup-content { z-index: 10000 !important; pointer-events: auto; }
+  </style>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
+</head>
+<body>
+<div id="container"></div>
+
+<script type="text/javascript">
+  const {DeckGL, MapView, PointCloudLayer, COORDINATE_SYSTEM} = deck;
+
+  // public access token, do w/e you want bots
+  mapboxgl.accessToken = 'pk.eyJ1Ijoicm91c2hqYWMiLCJhIjoiY2xsZ205dnk2MTBmNzNucXZydmJzNGZycSJ9.QH9OthOUQTvlv-gDh3Q6mw';
+
+  // Local GeoJSON: each Point has coordinates [lng, lat, zMeters] and required properties
+  const GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+      {"type":"Feature","geometry":{"type":"Point","coordinates":[-83.0458,42.3314,430.0]},"properties":{"altitude_ft":1325,"speed_kt":108,"heading_deg":7,"timestamp_local":"2025-09-26 22:08:36 EDT"}},
+      {"type":"Feature","geometry":{"type":"Point","coordinates":[-83.08,42.36,475.0]},"properties":{"altitude_ft":1500,"speed_kt":120,"heading_deg":42,"timestamp_local":"2025-09-26 22:09:10 EDT"}},
+      {"type":"Feature","geometry":{"type":"Point","coordinates":[-83.02,42.30,274.0]},"properties":{"altitude_ft":900,"speed_kt":95,"heading_deg":355,"timestamp_local":"2025-09-26 22:10:02 EDT"}}
+    ]
+  };
+
+  // Flatten features into layer data
+  const DATA = (GEOJSON.features || [])
+    .filter(f => f && f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
+    .map(f => ({
+      position: f.geometry.coordinates,   // [lng, lat, zMeters]
+      properties: f.properties || {}
+    }));
+
+  const deckgl = new DeckGL({
+    container: 'container',
+    views: new MapView({repeat: true}),
+    mapStyle: 'mapbox://styles/mapbox/light-v11',
+    mapboxApiAccessToken: mapboxgl.accessToken,
+    initialViewState: {
+      longitude: DATA.length ? DATA[0].position[0] : -83.0458,
+      latitude:  DATA.length ? DATA[0].position[1] : 42.3314,
+      zoom: 11,
+      pitch: 60,
+      bearing: 20
+    },
+    controller: {dragRotate: true}
+  });
+
+  const map = deckgl.getMapboxMap();
+
+  // Prevent the browser context menu so right-click+drag can control map pitch/rotation.
+  // Attach to both the container and the underlying canvas to be safe.
+  const containerEl = document.getElementById('container');
+  containerEl.addEventListener('contextmenu', e => e.preventDefault());
+  if (map && map.getCanvas) {
+    map.getCanvas().addEventListener('contextmenu', e => e.preventDefault());
+ }
+
+  map.on('style.load', () => {
+    if (!map.getSource('mapbox-dem')) {
+      map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://styles/mapbox/satellite-streets-v12',
+        tileSize: 512,
+        maxzoom: 14
+      });
+    }
+    map.setTerrain({source: 'mapbox-dem', exaggeration: 5.0});
+    map.setFog({
+      color: 'white',
+      'high-color': '#c6e7ff',
+      'horizon-blend': 0.2,
+      'space-color': '#000',
+      'star-intensity': 0.0
+    });
+  });
+
+  // 3D points: DeckGL PointCloudLayer using LNGLAT+Z; z is meters
+  const pointLayer = new PointCloudLayer({
+    id: 'points-3d',
+    data: DATA,
+    pickable: true,
+    coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
+    getPosition: d => d.position,                 // [lng, lat, zMeters]
+    getColor: d => [200, 30, 0, 255],
+    pointSize: 8                                   // pixels
+  });
+
+  deckgl.setProps({
+    layers: [pointLayer],
+    onClick: info => {
+      if (!info.object) return;
+      const {properties} = info.object;
+      const html = `
+        <div style="font: 12px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+          <div style="font-weight:600;margin-bottom:4px;">Point</div>
+          <div><b>Altitude (ft):</b> ${properties.altitude_ft ?? '—'}</div>
+          <div><b>Speed (kt):</b> ${properties.speed_kt ?? '—'}</div>
+          <div><b>Heading (°):</b> ${properties.heading_deg ?? '—'}</div>
+          <div><b>Timestamp:</b> ${properties.timestamp_local ?? '—'}</div>
+        </div>
+      `;
+      new mapboxgl.Popup({closeButton: true, closeOnClick: true})
+        .setLngLat([info.coordinate[0], info.coordinate[1]])
+        .setHTML(html)
+        .addTo(map);
+    }
+  });
+
+  // Fit to data bounds
+  if (DATA.length > 0) {
+    const lngs = DATA.map(d => d.position[0]);
+    const lats = DATA.map(d => d.position[1]);
+    const bounds = new mapboxgl.LngLatBounds(
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)]
+    );
+    map.fitBounds(bounds, {padding: 60, duration: 0});
+    map.setPitch(60);
+    map.setBearing(20);
+  }
+</script>
+</body>
+</html>
