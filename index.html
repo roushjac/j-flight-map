@@ -37,7 +37,7 @@
 
   const {PointCloudLayer, COORDINATE_SYSTEM, MapboxOverlay} = deck;
   const TERRAIN_EXAGGERATION = 3.0;
-  const POINT_SIZE = 8;
+  const POINT_SIZE = 5;
 
   function parseTs(v) {
     if (v === null || v === undefined) return null;
@@ -110,9 +110,12 @@
   const minZPara = elevPara.length ? Math.min(...elevPara) : 0;
   const maxZPara = elevPara.length ? Math.max(...elevPara) : 1;
 
-  // PARA: Cyan → Red (distinct scheme)
-  const COLOR_LOW  = [  0, 200, 255];
-  const COLOR_HIGH = [220,   0,  60];
+  const overallMinZ = Math.min(minZHeli, minZPara);
+  const overallMaxZ = Math.max(maxZHeli, maxZPara);
+
+  // Color ramps (RGB arrays) for low and high values
+  const COLOR_LOW = [65, 244, 250];
+  const COLOR_HIGH = [237, 7, 49];
 
   function lerpColor(c1, c2, t) {
     const u = Math.max(0, Math.min(1, t));
@@ -124,11 +127,11 @@
     ];
   }
   function colorForZHeli(z) {
-    const t = (z - minZHeli) / (maxZHeli - minZHeli || 1);
+    const t = (z - overallMinZ) / (overallMaxZ - overallMinZ || 1);
     return lerpColor(COLOR_LOW, COLOR_HIGH, t);
   }
   function colorForZPara(z) {
-    const t = (z - minZPara) / (maxZPara - minZPara || 1);
+    const t = (z - overallMinZ) / (overallMaxZ - overallMinZ || 1);
     return lerpColor(COLOR_LOW, COLOR_HIGH, t);
   }
 
@@ -173,8 +176,8 @@
       coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
       positionFormat: 'XYZ',
       getPosition: d => [d.position[0], d.position[1], (d.position[2]||0) * TERRAIN_EXAGGERATION],
-      getColor: d => [224, 9, 9, 255], // solid red for helicopter
-      pointSize: 12,
+      getColor: d => colorForZHeli(d.position[2] || 0),
+      pointSize: POINT_SIZE,
       updateTriggers: { getColor: [minZHeli, maxZHeli] }
     });
 
@@ -185,8 +188,8 @@
       coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
       positionFormat: 'XYZ',
       getPosition: d => [d.position[0], d.position[1], (d.position[2]||0) * TERRAIN_EXAGGERATION],
-      getColor: d => [0, 200, 255, 255], // solid cyan for paraglider
-      pointSize: 12,
+      getColor: d => colorForZPara(d.position[2] || 0),
+      pointSize: POINT_SIZE,
       updateTriggers: { getColor: [minZPara, maxZPara] }
     });
 
