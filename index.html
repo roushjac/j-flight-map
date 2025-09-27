@@ -96,6 +96,42 @@
       });
     }
     map.setTerrain({source: 'mapbox-dem', exaggeration: TERRAIN_EXAGGERATION});
+
+    // Make the basemap ~50% opaque by adjusting paint properties for common layer types.
+    // This affects raster/vector/background layers but leaves DeckGL canvases (points) untouched.
+    (function setBasemapOpacity(opacity = 0.5) {
+      const layers = map.getStyle && map.getStyle().layers ? map.getStyle().layers : [];
+      layers.forEach(layer => {
+        const id = layer.id;
+        try {
+          switch (layer.type) {
+            case 'raster':
+              map.setPaintProperty(id, 'raster-opacity', opacity);
+              break;
+            case 'background':
+              map.setPaintProperty(id, 'background-opacity', opacity);
+              break;
+            case 'fill':
+              map.setPaintProperty(id, 'fill-opacity', opacity);
+              break;
+            case 'line':
+              map.setPaintProperty(id, 'line-opacity', opacity);
+              break;
+            case 'symbol':
+              // icons and labels
+              map.setPaintProperty(id, 'icon-opacity', opacity);
+              map.setPaintProperty(id, 'text-opacity', opacity);
+              break;
+            case 'fill-extrusion':
+              map.setPaintProperty(id, 'fill-extrusion-opacity', opacity);
+              break;
+            // leave other layer types alone
+          }
+        } catch (err) {
+          // some layers won't accept certain paint props — ignore errors
+        }
+      });
+    })(0.6);
   });
 
   const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
@@ -113,8 +149,7 @@
   const overallMinZ = Math.min(minZHeli, minZPara);
   const overallMaxZ = Math.max(maxZHeli, maxZPara);
 
-  // Color ramps (RGB arrays) for low and high values
-  const COLOR_LOW = [65, 244, 250];
+  const COLOR_LOW = [16, 0, 247];
   const COLOR_HIGH = [237, 7, 49];
 
   function lerpColor(c1, c2, t) {
