@@ -42,7 +42,14 @@
 const POINT_SIZE = 8;
 
   // Flatten features
-  const DATA = (GEOJSON.features || [])
+  const HELI_DATA = (HELI_GEOJSON.features || [])
+    .filter(f => f && f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
+    .map(f => ({
+      position: f.geometry.coordinates,   // [lng, lat, zMeters]
+      properties: f.properties || {}
+    }));
+
+  const PARA_DATA = (PARA_GEOJSON.features || [])
     .filter(f => f && f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
     .map(f => ({
       position: f.geometry.coordinates,   // [lng, lat, zMeters]
@@ -50,7 +57,7 @@ const POINT_SIZE = 8;
     }));
 
   // Mapbox map
-  const center = DATA.length ? [DATA[0].position[0], DATA[0].position[1]] : [-83.0458, 42.3314];
+  const center = HELI_DATA.length ? [HELI_DATA[0].position[0], HELI_DATA[0].position[1]] : [-83.0458, 42.3314];
 const map = new mapboxgl.Map({
   container: 'map',
   style: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -79,7 +86,7 @@ const TERRAIN_EXAGGERATION = 3.0; // keep in sync with map.setTerrain
 const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
 map.addControl(overlay);
 
-const elevations = DATA.map(d => d.position[2] || 0);
+const elevations = HELI_DATA.map(d => d.position[2] || 0);
 const minZ = Math.min(...elevations);
 const maxZ = Math.max(...elevations);
 
@@ -100,15 +107,15 @@ function lerpColor(c1, c2, t) {
 // Slider wiring
 const slider = document.getElementById('timeSlider');
 const label  = document.getElementById('timeLabel');
-slider.max = Math.max(1, DATA.length);
+slider.max = Math.max(1, HELI_DATA.length);
 slider.value = 1;
 
 // Keep currently selected popup in sync with filtering
 let selected = null; // {lng,lat,z,properties} if you use the custom DOM popup from earlier
 
 function renderUpTo(count) {
-  const n = Math.max(1, Math.min(DATA.length, count|0));
-  const subset = DATA.slice(0, n);
+  const n = Math.max(1, Math.min(HELI_DATA.length, count|0));
+  const subset = HELI_DATA.slice(0, n);
 
   const layer = new PointCloudLayer({
     id: 'points-3d',
@@ -137,11 +144,11 @@ function renderUpTo(count) {
 
   // Label shows index and timestamp of the newest visible point
   const ts = subset[n - 1]?.properties?.timestamp_local || '';
-  label.textContent = `${n}/${DATA.length}  ${ts}`;
+  label.textContent = `${n}/${HELI_DATA.length}  ${ts}`;
 
   // If you used the custom DOM popup: hide it if it refers to a filtered-out point
   if (selected) {
-    const idx = DATA.indexOf(DATA.find(d =>
+    const idx = HELI_DATA.indexOf(HELI_DATA.find(d =>
       d.properties === selected.properties ||
       (d.position[0] === selected.lng && d.position[1] === selected.lat && d.position[2]*TERRAIN_EXAGGERATION === selected.z)
     ));
@@ -173,7 +180,7 @@ function step(t) {
   if (!playing) return;
   if (t - last >= STEP_MS) {
     let idx = +slider.value;
-    idx = (idx < DATA.length) ? (idx + 1) : 1; // loop
+    idx = (idx < HELI_DATA.length) ? (idx + 1) : 1; // loop
     slider.value = idx;
     renderUpTo(idx);
     last = t;
@@ -240,9 +247,9 @@ window.addEventListener('beforeunload', () => {
   });
 
   // Fit to data bounds
-  if (DATA.length > 0) {
-    const lngs = DATA.map(d => d.position[0]);
-    const lats = DATA.map(d => d.position[1]);
+  if (HELI_DATA.length > 0) {
+    const lngs = HELI_DATA.map(d => d.position[0]);
+    const lats = HELI_DATA.map(d => d.position[1]);
     const bounds = new mapboxgl.LngLatBounds(
       [Math.min(...lngs), Math.min(...lats)],
       [Math.max(...lngs), Math.max(...lats)]
