@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J Flight Map - Interactive 3D Flight Tracker</title>
+    
+    <!-- Mapbox GL JS -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 300px;
+        }
+
+        .map-overlay h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .map-overlay p {
+            font-size: 14px;
+            color: #cccccc;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .flight-info {
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .flight-info h3 {
+            color: #00d4ff;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .flight-info p {
+            margin: 4px 0;
+            font-size: 12px;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-button {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 212, 255, 0.3);
+        }
+
+        .control-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 212, 255, 0.5);
+        }
+
+        .control-button:active {
+            transform: translateY(0);
+        }
+
+        /* Custom popup styles */
+        .mapboxgl-popup-content {
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            backdrop-filter: blur(10px);
+            max-width: 280px;
+        }
+
+        .mapboxgl-popup-tip {
+            border-top-color: rgba(0, 0, 0, 0.9) !important;
+        }
+
+        .popup-content {
+            padding: 15px;
+        }
+
+        .popup-content h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            text-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+        }
+
+        .popup-content .property {
+            margin: 6px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .popup-content .property-label {
+            color: #cccccc;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .popup-content .property-value {
+            color: #00d4ff;
+            text-align: right;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 3px solid rgba(0, 212, 255, 0.3);
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading Flight Data...</p>
+    </div>
+
+    <div id="map"></div>
+    
+    <div class="map-overlay">
+        <h1>Flight Tracker</h1>
+        <p>Interactive 3D flight path visualization</p>
+        <div class="flight-info">
+            <h3>Flight Details</h3>
+            <p><strong>Route:</strong> SFO → LAX</p>
+            <p><strong>Date:</strong> January 15, 2024</p>
+            <p><strong>Points:</strong> <span id="point-count">0</span></p>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="control-button" onclick="flyToStart()">Start</button>
+        <button class="control-button" onclick="flyToEnd()">End</button>
+        <button class="control-button" onclick="showFullRoute()">Full Route</button>
+        <button class="control-button" onclick="toggle3D()"id="toggle3d">3D View</button>
+    </div>
+
+    <!-- Load flight data -->
+    <script src="data.js"></script>
+
+    <script>
+        // Check if Mapbox is available
+        if (typeof mapboxgl === 'undefined') {
+            console.log('Mapbox GL JS not loaded, showing demo mode');
+            document.getElementById('loading').innerHTML = `
+                <div class="spinner"></div>
+                <p>Demo Mode - Mapbox API not available</p>
+                <p>This demonstrates the flight data structure and UI</p>
+            `;
+            
+            // Show demo data in overlay instead
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+                showDemoMode();
+            }, 2000);
+        } else {
+            // Mapbox access token - Note: In production, use environment variables
+            mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+        }
+
+        let map;
+        let currentPopup = null;
+        let is3DMode = false;
+
+        function showDemoMode() {
+            // Create demo visualization showing flight points
+            const mapDiv = document.getElementById('map');
+            mapDiv.innerHTML = `
+                <div style="
+                    background: linear-gradient(45deg, #1a1a1a, #2d2d2d);
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    color: white;
+                    font-family: Arial, sans-serif;
+                ">
+                    <h2 style="color: #00d4ff; margin-bottom: 20px;">Flight Data Loaded Successfully</h2>
+                    <div style="background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; max-width: 500px;">
+                        <h3 style="color: #00d4ff; margin-bottom: 15px;">Flight Path Summary</h3>
+                        <div id="demo-points-container"></div>
+                    </div>
+                    <p style="margin-top: 20px; opacity: 0.7;">
+                        In production, this would display an interactive 3D Mapbox map
+                    </p>
+                </div>
+            `;
+
+            // Display flight points data
+            const container = document.getElementById('demo-points-container');
+            flightData.features.forEach((point, index) => {
+                const props = point.properties;
+                const coords = point.geometry.coordinates;
+                const pointDiv = document.createElement('div');
+                pointDiv.style.cssText = `
+                    margin: 8px 0;
+                    padding: 10px;
+                    background: rgba(0, 212, 255, 0.1);
+                    border-left: 3px solid #00d4ff;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                `;
+                
+                pointDiv.innerHTML = `
+                    <strong>Point ${index + 1}: ${props.phase.toUpperCase()}</strong><br>
+                    <small>
+                        Speed: ${props.speed} knots | 
+                        Heading: ${props.heading}° | 
+                        Altitude: ${props.altitude.toLocaleString()} ft<br>
+                        Coordinates: ${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}<br>
+                        Time: ${new Date(props.timestamp).toLocaleTimeString()}
+                    </small>
+                `;
+
+                pointDiv.onclick = () => {
+                    alert(`Flight Point Details:
+Phase: ${props.phase}
+Speed: ${props.speed} knots
+Heading: ${props.heading}°
+Altitude: ${props.altitude} ft
+Timestamp: ${props.timestamp}
+Coordinates: [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                };
+
+                pointDiv.onmouseenter = () => {
+                    pointDiv.style.background = 'rgba(0, 212, 255, 0.2)';
+                    pointDiv.style.transform = 'translateX(5px)';
+                };
+
+                pointDiv.onmouseleave = () => {
+                    pointDiv.style.background = 'rgba(0, 212, 255, 0.1)';
+                    pointDiv.style.transform = 'translateX(0)';
+                };
+
+                container.appendChild(pointDiv);
+            });
+
+            // Update point count
+            document.getElementById('point-count').textContent = flightData.features.length;
+        }
+
+        // Initialize the map
+        function initMap() {
+            map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/satellite-streets-v12', // 3D satellite view
+                center: [-120.5, 37.5], // Center between SF and LA
+                zoom: 6,
+                pitch: 0, // Start in 2D, will enable 3D
+                bearing: 0,
+                antialias: true
+            });
+
+            map.on('load', function() {
+                // Hide loading screen
+                document.getElementById('loading').style.display = 'none';
+
+                // Add 3D terrain
+                map.addSource('mapbox-dem', {
+                    'type': 'raster-dem',
+                    'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                    'tileSize': 512,
+                    'maxzoom': 14
+                });
+
+                map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+
+                // Add flight data
+                addFlightData();
+                
+                // Enable 3D mode by default
+                enable3D();
+
+                // Update point count
+                document.getElementById('point-count').textContent = flightData.features.length;
+            });
+        }
+
+        function addFlightData() {
+            // Add flight path line
+            const coordinates = flightData.features.map(feature => feature.geometry.coordinates);
+            
+            map.addSource('flight-path', {
+                'type': 'geojson',
+                'data': {
+                    'type': 'Feature',
+                    'properties': {},
+                    'geometry': {
+                        'type': 'LineString',
+                        'coordinates': coordinates
+                    }
+                }
+            });
+
+            // Add flight path line layer
+            map.addLayer({
+                'id': 'flight-path-line',
+                'type': 'line',
+                'source': 'flight-path',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': '#00d4ff',
+                    'line-width': 4,
+                    'line-opacity': 0.8
+                }
+            });
+
+            // Add flight points
+            map.addSource('flight-points', {
+                'type': 'geojson',
+                'data': flightData
+            });
+
+            // Add flight points layer
+            map.addLayer({
+                'id': 'flight-points',
+                'type': 'circle',
+                'source': 'flight-points',
+                'paint': {
+                    'circle-radius': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        5, 4,
+                        15, 8
+                    ],
+                    'circle-color': [
+                        'case',
+                        ['==', ['get', 'phase'], 'takeoff'], '#ff6b6b',
+                        ['==', ['get', 'phase'], 'climb'], '#feca57',
+                        ['==', ['get', 'phase'], 'cruise'], '#48dbfb',
+                        ['==', ['get', 'phase'], 'descent'], '#ff9ff3',
+                        ['==', ['get', 'phase'], 'approach'], '#54a0ff',
+                        ['==', ['get', 'phase'], 'landing'], '#5f27cd',
+                        '#ffffff'
+                    ],
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-width': 2,
+                    'circle-opacity': 0.9
+                }
+            });
+
+            // Add hover effects
+            map.on('mouseenter', 'flight-points', function() {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'flight-points', function() {
+                map.getCanvas().style.cursor = '';
+            });
+
+            // Add click event for popups
+            map.on('click', 'flight-points', function(e) {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const properties = e.features[0].properties;
+
+                // Close existing popup
+                if (currentPopup) {
+                    currentPopup.remove();
+                }
+
+                // Create popup content
+                const popupContent = createPopupContent(properties);
+
+                // Create new popup
+                currentPopup = new mapboxgl.Popup({ closeOnClick: true })
+                    .setLngLat(coordinates)
+                    .setHTML(popupContent)
+                    .addTo(map);
+            });
+        }
+
+        function createPopupContent(properties) {
+            const timestamp = new Date(properties.timestamp).toLocaleString();
+            
+            return `
+                <div class="popup-content">
+                    <h3>Flight Point Details</h3>
+                    <div class="property">
+                        <span class="property-label">Phase:</span>
+                        <span class="property-value">${properties.phase.charAt(0).toUpperCase() + properties.phase.slice(1)}</span>
+                    </div>
+                    <div class="property">
+                        <span class="property-label">Speed:</span>
+                        <span class="property-value">${properties.speed} knots</span>
+                    </div>
+                    <div class="property">
+                        <span class="property-label">Heading:</span>
+                        <span class="property-value">${properties.heading}°</span>
+                    </div>
+                    <div class="property">
+                        <span class="property-label">Altitude:</span>
+                        <span class="property-value">${properties.altitude.toLocaleString()} ft</span>
+                    </div>
+                    <div class="property">
+                        <span class="property-label">Time:</span>
+                        <span class="property-value">${timestamp}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Control functions
+        function flyToStart() {
+            const startPoint = flightData.features[0].geometry.coordinates;
+            map.flyTo({
+                center: [startPoint[0], startPoint[1]],
+                zoom: 12,
+                pitch: 60,
+                duration: 2000
+            });
+        }
+
+        function flyToEnd() {
+            const endPoint = flightData.features[flightData.features.length - 1].geometry.coordinates;
+            map.flyTo({
+                center: [endPoint[0], endPoint[1]],
+                zoom: 12,
+                pitch: 60,
+                duration: 2000
+            });
+        }
+
+        function showFullRoute() {
+            const coordinates = flightData.features.map(f => f.geometry.coordinates);
+            const bounds = coordinates.reduce((bounds, coord) => {
+                return bounds.extend(coord);
+            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+            map.fitBounds(bounds, {
+                padding: 50,
+                pitch: 45,
+                duration: 2000
+            });
+        }
+
+        function toggle3D() {
+            if (is3DMode) {
+                disable3D();
+            } else {
+                enable3D();
+            }
+        }
+
+        function enable3D() {
+            map.easeTo({
+                pitch: 60,
+                duration: 1000
+            });
+            is3DMode = true;
+            document.getElementById('toggle3d').textContent = '2D View';
+        }
+
+        function disable3D() {
+            map.easeTo({
+                pitch: 0,
+                duration: 1000
+            });
+            is3DMode = false;
+            document.getElementById('toggle3d').textContent = '3D View';
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof mapboxgl !== 'undefined') {
+                initMap();
+            }
+            // Demo mode is already handled above if mapboxgl is undefined
+        });
+
+        // Handle map resize
+        window.addEventListener('resize', function() {
+            map.resize();
+        });
+    </script>
+</body>
+</html>
