@@ -40,7 +40,7 @@
     }
     #controls {
       position: absolute; top: 12px; left: 12px; z-index: 10001;
-      padding: 12px 16px; min-width: 380px;
+      padding: 12px 16px; min-width: 340px; max-width: min(92vw, 420px);
       display: flex; flex-direction: column; gap: 10px;
     }
     .controls-row { display: flex; align-items: center; gap: 10px; }
@@ -75,6 +75,11 @@
     }
     .time-display { font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; }
     .time-display .current-time { color: var(--text); font-variant-numeric: tabular-nums; }
+    .ui-note {
+      font-size: 11px; color: #b8b5ff; letter-spacing: 0.2px;
+      background: rgba(108,99,255,0.14); border: 1px solid rgba(108,99,255,0.35);
+      border-radius: 999px; padding: 4px 8px; width: fit-content;
+    }
     #stats {
       position: absolute; top: 12px; right: 12px; z-index: 10001;
       width: 240px; padding: 0; overflow: hidden;
@@ -134,6 +139,7 @@
     <span id="elapsed">00:00:00</span>
     <span class="current-time" id="timeLabel">&mdash;</span>
   </div>
+  <div class="ui-note" role="status">Enhanced aircraft markers</div>
 </div>
 
 <div id="stats" class="glass">
@@ -161,7 +167,14 @@
 
   var PathLayer = deck.PathLayer;
   var ScatterplotLayer = deck.ScatterplotLayer;
+  var ScenegraphLayer = deck.ScenegraphLayer;
   var MapboxOverlay = deck.MapboxOverlay;
+  var HELI_MODEL_URL = 'https://raw.githubusercontent.com/FOSS-Supremacy/defy/d33cef14f47b054845f9f447249dfd412a51163b/assets/heli/bell_429_helicopter.glb';
+  var PARA_MODEL_URL = 'https://raw.githubusercontent.com/platypii/ParaDrone/c9eead8f79b422aed579699a7a7c46d84c779ee8/simulator/img/paraglider.glb';
+  var MODEL_PITCH_DEG = 90;
+  var MODEL_ROLL_DEG = 0;
+  var HELI_MODEL_SCALE = 30;
+  var PARA_MODEL_SCALE = 20;
 
   /* === DATA PARSING === */
   function parseTs(v) {
@@ -352,7 +365,7 @@
         data: [{ path: buildPath(HELI_DATA, heliEnd) }],
         getPath: function (d) { return d.path; },
         getColor: [255, 140, 0, 200],
-        widthMinPixels: 3, widthMaxPixels: 4,
+        widthMinPixels: 5, widthMaxPixels: 7,
         jointRounded: true, capRounded: true, billboard: false
       }));
     }
@@ -363,7 +376,7 @@
         data: [{ path: buildPath(PARA_DATA, paraEnd) }],
         getPath: function (d) { return d.path; },
         getColor: [0, 206, 209, 200],
-        widthMinPixels: 3, widthMaxPixels: 4,
+        widthMinPixels: 5, widthMaxPixels: 7,
         jointRounded: true, capRounded: true, billboard: false
       }));
     }
@@ -373,6 +386,7 @@
       var hp = HELI_DATA[heliEnd].position;
       markers.push({
         position: [hp[0], hp[1], (hp[2] || 0) * TERRAIN_EX],
+        heading: HELI_DATA[heliEnd].properties.heading_deg || 0,
         fillColor: [255, 140, 0, 255], lineColor: [255, 255, 255, 255],
         radius: 14, isHeli: true
       });
@@ -381,21 +395,43 @@
       var pp = PARA_DATA[paraEnd].position;
       markers.push({
         position: [pp[0], pp[1], (pp[2] || 0) * TERRAIN_EX],
+        heading: PARA_DATA[paraEnd].properties.heading_deg || 0,
         fillColor: [0, 206, 209, 255], lineColor: [255, 255, 255, 255],
         radius: 14, isHeli: false
       });
     }
     if (markers.length) {
-      layers.push(new ScatterplotLayer({
-        id: 'markers',
-        data: markers,
-        getPosition: function (d) { return d.position; },
-        getFillColor: function (d) { return d.fillColor; },
-        getLineColor: function (d) { return d.lineColor; },
-        getRadius: function (d) { return d.radius; },
-        radiusUnits: 'pixels', stroked: true,
-        lineWidthMinPixels: 2, pickable: true
-      }));
+      if (ScenegraphLayer) {
+        layers.push(new ScenegraphLayer({
+          id: 'heli-model',
+          data: markers.filter(function (d) { return d.isHeli; }),
+          scenegraph: HELI_MODEL_URL,
+          getPosition: function (d) { return d.position; },
+          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading, MODEL_ROLL_DEG]; },
+          sizeScale: HELI_MODEL_SCALE,
+          pickable: true
+        }));
+        layers.push(new ScenegraphLayer({
+          id: 'para-model',
+          data: markers.filter(function (d) { return !d.isHeli; }),
+          scenegraph: PARA_MODEL_URL,
+          getPosition: function (d) { return d.position; },
+          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading, MODEL_ROLL_DEG]; },
+          sizeScale: PARA_MODEL_SCALE,
+          pickable: true
+        }));
+      } else {
+        layers.push(new ScatterplotLayer({
+          id: 'markers',
+          data: markers,
+          getPosition: function (d) { return d.position; },
+          getFillColor: function (d) { return d.fillColor; },
+          getLineColor: function (d) { return d.lineColor; },
+          getRadius: function (d) { return d.radius; },
+          radiusUnits: 'pixels', stroked: true,
+          lineWidthMinPixels: 2, pickable: true
+        }));
+      }
     }
 
     overlay.setProps({ layers: layers });
@@ -650,7 +686,7 @@
     if (!pickFn) return;
     var pick = pickFn({
       x: x, y: y, radius: 16,
-      layerIds: ['heli-path', 'para-path', 'markers']
+      layerIds: ['heli-path', 'para-path', 'markers', 'heli-model', 'para-model']
     });
     if (!pick || !pick.object) return;
 
