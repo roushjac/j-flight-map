@@ -157,6 +157,7 @@
   var TERRAIN_EX = 1.5;
   var M_TO_FT = 3.28084;
   var TIMELINE_STEP = 3;
+  var PARA_CHART_STEP = 10;  // downsample paraglider chart for performance
 
   var PathLayer = deck.PathLayer;
   var ScatterplotLayer = deck.ScatterplotLayer;
@@ -237,10 +238,12 @@
 
   var timeline = [];
   if (allTsSorted.length > 0) {
-    for (var ti = 0; ti < allTsSorted.length; ti += TIMELINE_STEP)
+    for (var ti = 0; ti < allTsSorted.length; ti += TIMELINE_STEP) {
       timeline.push(allTsSorted[ti]);
-    if (timeline[timeline.length - 1] !== allTsSorted[allTsSorted.length - 1])
+    }
+    if (timeline[timeline.length - 1] !== allTsSorted[allTsSorted.length - 1]) {
       timeline.push(allTsSorted[allTsSorted.length - 1]);
+    }
   }
 
   var firstTs = timeline[0];
@@ -548,7 +551,7 @@
       altCtx.beginPath();
       altCtx.strokeStyle = 'rgba(0,206,209,0.8)';
       altCtx.lineWidth = 1.5;
-      for (var j = 0; j < paraChartTs.length; j += 10) {
+      for (var j = 0; j < paraChartTs.length; j += PARA_CHART_STEP) {
         j === 0 ? altCtx.moveTo(tsToX(paraChartTs[j]), altToY(paraChartAlt[j]))
                 : altCtx.lineTo(tsToX(paraChartTs[j]), altToY(paraChartAlt[j]));
       }
@@ -574,6 +577,7 @@
   var raf = 0;
   var lastFrameTime = 0;
   var playSpeed = 1;
+  // Base interval between animation frames in ms; lower = faster default playback
   var BASE_STEP_MS = 100;
 
   slider.addEventListener('input', function () {
