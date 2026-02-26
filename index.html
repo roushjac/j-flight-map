@@ -172,9 +172,10 @@
   var HELI_MODEL_URL = 'https://raw.githubusercontent.com/FOSS-Supremacy/defy/d33cef14f47b054845f9f447249dfd412a51163b/assets/heli/bell_429_helicopter.glb';
   var PARA_MODEL_URL = 'https://raw.githubusercontent.com/platypii/ParaDrone/c9eead8f79b422aed579699a7a7c46d84c779ee8/simulator/img/paraglider.glb';
   var MODEL_PITCH_DEG = 90;
+  var MODEL_HEADING_OFFSET_DEG = -90;
   var MODEL_ROLL_DEG = 0;
   var HELI_MODEL_SCALE = 30;
-  var PARA_MODEL_SCALE = 20;
+  var PARA_MODEL_SCALE = 2;
 
   /* === DATA PARSING === */
   function parseTs(v) {
@@ -407,7 +408,7 @@
           data: markers.filter(function (d) { return d.isHeli; }),
           scenegraph: HELI_MODEL_URL,
           getPosition: function (d) { return d.position; },
-          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading, MODEL_ROLL_DEG]; },
+          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading + MODEL_HEADING_OFFSET_DEG, MODEL_ROLL_DEG]; },
           sizeScale: HELI_MODEL_SCALE,
           pickable: true
         }));
@@ -416,7 +417,7 @@
           data: markers.filter(function (d) { return !d.isHeli; }),
           scenegraph: PARA_MODEL_URL,
           getPosition: function (d) { return d.position; },
-          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading, MODEL_ROLL_DEG]; },
+          getOrientation: function (d) { return [MODEL_PITCH_DEG, d.heading + MODEL_HEADING_OFFSET_DEG, MODEL_ROLL_DEG]; },
           sizeScale: PARA_MODEL_SCALE,
           pickable: true
         }));
